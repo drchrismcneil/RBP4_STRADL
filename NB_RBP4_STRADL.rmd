@@ -1,0 +1,183 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+# RBP4 in STRADL
+
+# RBP4 in the plasma of STRADL participants
+# Hypothesis - RBP4 concentration in the plasma is linked to cognitive decline and risk of developing dementia, including Alzheimer's dementia
+
+# Plasma analysis of RBP4 by Jason Clarke, under supervision of Prof Peter McCafferty.
+# This analysis by Chris McNeil. 
+# 2021_02_24
+
+## Import Libraries
+
+```{r message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(readr)
+library(readxl)
+library(performance)
+library(Hmisc) #correlations
+library(corrplot) #plotting correlations
+library(expss) # apply labels to variable names
+```
+
+## import STRADL data
+### confounding variables: demographics
+### Variables of interest: Brain MRI variables (volumes etc), cognitive variables
+
+
+
+```{r}
+nonmridata <- read_excel("rawdata/2021_02_25_Cmcneil.xlsx")
+RBP4_data <- read_excel("rawdata/RBP4 data 1.xlsx", 
+    col_types = c("skip", "text", "skip", 
+        "numeric", "numeric"))
+mri_data <- read_excel("rawdata/mri_data.xlsx")
+```
+
+
+
+## rename STRADLID
+
+```{r}
+nonmridata <- nonmridata %>% rename(id=ID)
+mri_data <- mri_data %>% rename(id=STRADLID)
+RBP4_data <- RBP4_data %>% rename(id=`SAMPLE CODE`)
+```
+
+
+## merge all data onto the RBP4 concentration data
+
+```{r}
+main_data<-left_join(RBP4_data,mri_data)
+main_data <- left_join(main_data,nonmridata)
+```
+## delete environment of extra data
+
+```{r}
+rm(list=setdiff(ls(), "main_data"))
+```
+
+## change sex character to numeric code (0=female, 1=male)
+```{r}
+main_data <- main_data %>% mutate(Sex=recode(Sex,("M"=1)))
+```
+
+
+
+
+## Check data distribution visually
+### trying to fit a normal distribution curve to data
+
+```{r}
+main_data %>% ggplot(aes(`RBP4 (ug/ml)`)) + geom_histogram(binwidth = 10,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$`RBP4 (ug/ml)`), sd=sd(main_data$`RBP4 (ug/ml)`))) + theme_bw()
+
+```
+
+## tranform the RBP4 data using log10
+
+
+```{r}
+main_data <- main_data %>% mutate(RBP4_log10=log10(`RBP4 (ug/ml)`))
+```
+
+## check disribution of transformed RBP4 data
+
+
+```{r}
+main_data %>% ggplot(aes(RBP4_log10)) + geom_histogram(bins = 35,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$RBP4_log10), sd=sd(main_data$RBP4_log10))) + theme_bw()
+
+```
+
+## summarise data by sex
+```{r}
+not.na = function(x) {sum(!is.na(x))}
+stats = c('mean', 'median', 'sd', 'not.na')
+
+main_data %>%select(`RBP4 (ug/ml)`,Sex) %>% group_by(Sex) %>% summarise_all(.funs=stats)
+                      
+```
+## Claculate relative brain volumes
+
+```{r}
+main_data <- main_data %>% mutate(total_hippo=LeftHippocampus+rightHippocampusVol)
+main_data <- main_data %>% mutate(hippo_brain=total_hippo/BrainSegNotVent,hippo_icv=total_hippo/eTIV,hippo_brain=total_hippo/BrainSegNotVent)
+
+```
+
+## plot RBP4 against BMI
+```{r}
+#calculate BMI
+main_data <- main_data %>% mutate(BMI=`Weight(kg)`/((`Height(cm)`*`Height(cm)`)/10000))
+```
+
+```{r}
+plotBMIvsRBP4 <- main_data %>% ggplot(aes(BMI,RBP4_log10))+geom_point(aes(color=factor(Sex)))+geom_smooth() + theme_bw()
+
+plotBMIvsRBP4
+```
+
+## RBP4 against hippocampal volume
+
+```{r}
+main_data <- main_data %>% mutate(total_hippo=(LeftHippocampus+rightHippocampusVol))
+
+plotRBP4vsHippovol <- main_data %>% ggplot(aes(RBP4_log10,total_hippo))+geom_point()+stat_smooth(method='lm') + theme_bw()
+
+plotRBP4vsHippovol
+
+
+```
+
+## Plot RBP4 concentration against Digit Symbol result
+```{r}
+plotRBP4vsdigit <- main_data %>% ggplot(aes(RBP4_log10,digsym))+geom_point()+stat_smooth(method='lm') + theme_bw()
+
+plotRBP4vsdigit
+```
+## Corrlation Matrix of RBP4 against key variables
+```{r}
+corrdata <- main_data %>% filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
+corr1 <- rcorr(as.matrix(corrdata))
+M <- corr1$r
+p_mat <- corr1$P
+corrplot(M, type = "upper",method="ellipse", order = "hclust", 
+         p.mat = p_mat, sig.level = 0.05, insig = "blank")
+
+
+```
+
+
+**There is no correlation between RBP4 concentrations and brain/cognition variables. (uncorrected)
+
+### Split analysis by gender
+
+#### Female
+
+```{r}
+corrdata <- main_data %>%filter(Sex==0) %>%  filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
+corr1 <- rcorr(as.matrix(corrdata))
+M <- corr1$r
+p_mat <- corr1$P
+corrplot(M, type = "upper",method="ellipse", order = "hclust", 
+         p.mat = p_mat, sig.level = 0.05, insig = "blank")
+```
+
+
+#### Male
+```{r}
+corrdata <- main_data %>%filter(Sex==1) %>%  filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
+corr1 <- rcorr(as.matrix(corrdata))
+M <- corr1$r
+p_mat <- corr1$P
+corrplot(M, type = "upper",method="ellipse", order = "hclust", 
+         p.mat = p_mat, sig.level = 0.05, insig = "blank")
+```
+
+```{r}
+
+corrdata  <- apply_labels(corrdata,AgeFaceToFace='Age (yrs)')
+```
