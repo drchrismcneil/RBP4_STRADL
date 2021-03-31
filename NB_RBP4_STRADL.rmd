@@ -21,7 +21,7 @@ library(readxl)
 library(performance)
 library(Hmisc) #correlations
 library(corrplot) #plotting correlations
-library(expss) # apply labels to variable names
+#library(expss) # apply labels to variable names
 ```
 
 ## import STRADL data
@@ -63,7 +63,8 @@ rm(list=setdiff(ls(), "main_data"))
 
 ## change sex character to numeric code (0=female, 1=male)
 ```{r}
-main_data <- main_data %>% mutate(Sex=recode(Sex,("M"=1)))
+main_data <- main_data %>% mutate(Sex, recode(Sex,"M"=1,"F"=2))
+
 ```
 
 
