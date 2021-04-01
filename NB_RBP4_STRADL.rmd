@@ -21,7 +21,7 @@ library(readxl)
 library(performance)
 library(Hmisc) #correlations
 library(corrplot) #plotting correlations
-#library(expss) # apply labels to variable names
+library(expss) # apply labels to variable names
 ```
 
 ## import STRADL data
@@ -40,7 +40,7 @@ mri_data <- read_excel("rawdata/mri_data.xlsx")
 
 
 
-## rename STRADLID
+### rename STRADLID
 
 ```{r}
 nonmridata <- nonmridata %>% rename(id=ID)
@@ -49,48 +49,84 @@ RBP4_data <- RBP4_data %>% rename(id=`SAMPLE CODE`)
 ```
 
 
-## merge all data onto the RBP4 concentration data
+### merge all data onto the RBP4 concentration data
 
 ```{r}
 main_data<-left_join(RBP4_data,mri_data)
 main_data <- left_join(main_data,nonmridata)
 ```
-## delete environment of extra data
+### delete environment of extra data
 
 ```{r}
 rm(list=setdiff(ls(), "main_data"))
 ```
 
-## change sex character to numeric code (0=female, 1=male)
+### change sex character to numeric code (0=female, 1=male). NB specify to use dplyr because of masking by expss library.
 ```{r}
-main_data <- main_data %>% mutate(Sex, recode(Sex,"M"=1,"F"=2))
+main_data <- main_data %>% mutate(Sex=dplyr::recode(Sex,"M"=1,"F"=0))
 
 ```
 
 
+## Data normalising and tranforming units
 
-
-## Check data distribution visually
-### trying to fit a normal distribution curve to data
+### Check data distribution visually
+#### trying to fit a normal distribution curve to data
 
 ```{r}
 main_data %>% ggplot(aes(`RBP4 (ug/ml)`)) + geom_histogram(binwidth = 10,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$`RBP4 (ug/ml)`), sd=sd(main_data$`RBP4 (ug/ml)`))) + theme_bw()
 
 ```
 
-## tranform the RBP4 data using log10
+### tranform the RBP4 data using log10
 
 
 ```{r}
 main_data <- main_data %>% mutate(RBP4_log10=log10(`RBP4 (ug/ml)`))
 ```
 
-## check disribution of transformed RBP4 data
+### check distribution of transformed RBP4 data
 
 
 ```{r}
 main_data %>% ggplot(aes(RBP4_log10)) + geom_histogram(bins = 35,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$RBP4_log10), sd=sd(main_data$RBP4_log10))) + theme_bw()
 
+```
+
+
+## calculate volumes as ml to clarify
+```{r}
+main_data <- main_data %>% mutate(BrainSegNotVent=BrainSegNotVent/100,CortexVol=CortexVol/1000, LeftHippocampus=LeftHippocampus/1000,rightHippocampusVol=rightHippocampusVol/1000)
+```
+
+## Calculate relative brain volumes
+
+```{r}
+main_data <- main_data %>% mutate(total_hippo=LeftHippocampus+rightHippocampusVol)
+main_data <- main_data %>% mutate(hippo_brain=total_hippo/BrainSegNotVent,hippo_icv=total_hippo/eTIV,hippo_brain=total_hippo/BrainSegNotVent)
+
+```
+
+## Data summarising
+
+### add labels to variables to make plots/tables easier to read:
+
+
+```{r}
+main_data  <- main_data %>% apply_labels(id="ID",
+                                         BrainSegNotVent = "Brain Vol (ml)",
+                                         CortexVol='Cortex Vol (ml)',
+                                         LeftHippocampus = "L Hippo (ml)",
+                                         rightHippocampusVol = "R Hippo (ml)",
+                                         eTIV = "ICV (ml)",
+                                         digsym='Digit Score',
+                                         AgeFaceToFace='Age (yrs)',
+                                         mema='Memory (immediate)',
+                                         memdela ='Memory (delayed)',
+                                         vftot='Verbal Fluency',
+                                         mrtotc='Matrix Reasoning (correct)',
+                                         RBP4_log10 ='log10[RBP4]',
+                                         total_hippo='total Hippo (ml)')
 ```
 
 ## summarise data by sex
@@ -101,13 +137,7 @@ stats = c('mean', 'median', 'sd', 'not.na')
 main_data %>%select(`RBP4 (ug/ml)`,Sex) %>% group_by(Sex) %>% summarise_all(.funs=stats)
                       
 ```
-## Claculate relative brain volumes
 
-```{r}
-main_data <- main_data %>% mutate(total_hippo=LeftHippocampus+rightHippocampusVol)
-main_data <- main_data %>% mutate(hippo_brain=total_hippo/BrainSegNotVent,hippo_icv=total_hippo/eTIV,hippo_brain=total_hippo/BrainSegNotVent)
-
-```
 
 ## plot RBP4 against BMI
 ```{r}
@@ -135,7 +165,7 @@ plotRBP4vsHippovol
 
 ## Plot RBP4 concentration against Digit Symbol result
 ```{r}
-plotRBP4vsdigit <- main_data %>% ggplot(aes(RBP4_log10,digsym))+geom_point()+stat_smooth(method='lm') + theme_bw()
+plotRBP4vsdigit <-  use_labels(main_data,{ggplot(..data,aes(RBP4_log10,digsym))+geom_point()+stat_smooth(method='lm') + theme_bw()})
 
 plotRBP4vsdigit
 ```
@@ -143,6 +173,7 @@ plotRBP4vsdigit
 ```{r}
 corrdata <- main_data %>% filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
 corr1 <- rcorr(as.matrix(corrdata))
+
 M <- corr1$r
 p_mat <- corr1$P
 corrplot(M, type = "upper",method="ellipse", order = "hclust", 
@@ -160,9 +191,8 @@ corrplot(M, type = "upper",method="ellipse", order = "hclust",
 
 ```{r}
 corrdata <- main_data %>%filter(Sex==0) %>%  filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
-corr1 <- rcorr(as.matrix(corrdata))
-M <- corr1$r
-p_mat <- corr1$P
+corr1 <-cor(corrdata)
+
 corrplot(M, type = "upper",method="ellipse", order = "hclust", 
          p.mat = p_mat, sig.level = 0.05, insig = "blank")
 ```
@@ -180,5 +210,5 @@ corrplot(M, type = "upper",method="ellipse", order = "hclust",
 
 ```{r}
 
-corrdata  <- apply_labels(corrdata,AgeFaceToFace='Age (yrs)')
+
 ```
