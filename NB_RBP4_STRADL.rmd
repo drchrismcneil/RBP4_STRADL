@@ -1,20 +1,29 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "RBP4 and dementia"
+author: "Chris McNeil"
+date: "19/04/2021"
+output: html_document
 ---
-# RBP4 in STRADL
 
-# RBP4 in the plasma of STRADL participants
-# Hypothesis - RBP4 concentration in the plasma is linked to cognitive decline and risk of developing dementia, including Alzheimer's dementia
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Is Retinol Binding Protein 4 plasma contentration associated with cognitive performance and markers of AD in a normal older people?
 
-# Plasma analysis of RBP4 by Jason Clarke, under supervision of Prof Peter McCafferty.
-# This analysis by Chris McNeil. 
-# 2021_02_24
+## Abstract
+Retinol Binding protein has been linked to cognitive decline and Alzheimer's disease, both in humans, and in animal models of AD. Here we measured the plasma concentration of RBP4 in the participants of the Stratifying Depression Longitudinally (STRADL) cohort. 
 
-## Import Libraries
 
-```{r message=FALSE, warning=FALSE}
+**Hypothesis - RBP4 plasma concentration associated with cognitive decline and risk of developing Alzheimer's dementia**
 
+* Plasma analysis of RBP4 by Jason Clarke, under supervision of Prof Peter McCafferty.
+* This analysis by Chris McNeil. 
+* 2021_02_24
+
+## Data Analysis
+
+**Import Packages**
+```{r  packages, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(readr)
 library(readxl)
@@ -22,15 +31,15 @@ library(performance)
 library(Hmisc) #correlations
 library(corrplot) #plotting correlations
 library(expss) # apply labels to variable names
+library(knitr) #neat tables
+library(kableExtra) #neater tables
 ```
 
-## import STRADL data
-### confounding variables: demographics
-### Variables of interest: Brain MRI variables (volumes etc), cognitive variables
-
-
-
-```{r}
+### Prepare Data
+* import STRADL data
+  + Confounding variables: demographics
+  + Variables of interest: Brain MRI variables (volumes etc), cognitive variables
+```{r data_import}
 nonmridata <- read_excel("rawdata/2021_02_25_Cmcneil.xlsx")
 RBP4_data <- read_excel("rawdata/RBP4 data 1.xlsx", 
     col_types = c("skip", "text", "skip", 
@@ -38,63 +47,22 @@ RBP4_data <- read_excel("rawdata/RBP4 data 1.xlsx",
 mri_data <- read_excel("rawdata/mri_data.xlsx")
 ```
 
-
-
-### rename STRADLID
-
-```{r}
+**Rename variables
+```{r renaming}
 nonmridata <- nonmridata %>% rename(id=ID)
 mri_data <- mri_data %>% rename(id=STRADLID)
 RBP4_data <- RBP4_data %>% rename(id=`SAMPLE CODE`)
 ```
 
-
-### merge all data onto the RBP4 concentration data
-
-```{r}
+**Merge dataframes
+```{r merging, echo=FALSE}
 main_data<-left_join(RBP4_data,mri_data)
 main_data <- left_join(main_data,nonmridata)
-```
-### delete environment of extra data
 
-```{r}
 rm(list=setdiff(ls(), "main_data"))
 ```
 
-### change sex character to numeric code (0=female, 1=male). NB specify to use dplyr because of masking by expss library.
-```{r}
-main_data <- main_data %>% mutate(Sex=dplyr::recode(Sex,"M"=1,"F"=0))
-
-```
-
-
-## Data normalising and tranforming units
-
-### Check data distribution visually
-#### trying to fit a normal distribution curve to data
-
-```{r}
-main_data %>% ggplot(aes(`RBP4 (ug/ml)`)) + geom_histogram(binwidth = 10,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$`RBP4 (ug/ml)`), sd=sd(main_data$`RBP4 (ug/ml)`))) + theme_bw()
-
-```
-
-### tranform the RBP4 data using log10
-
-
-```{r}
-main_data <- main_data %>% mutate(RBP4_log10=log10(`RBP4 (ug/ml)`))
-```
-
-### check distribution of transformed RBP4 data
-
-
-```{r}
-main_data %>% ggplot(aes(RBP4_log10)) + geom_histogram(bins = 35,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$RBP4_log10), sd=sd(main_data$RBP4_log10))) + theme_bw()
-
-```
-
-
-## calculate volumes as ml to clarify
+**Calculate volumes as ml to clarify**
 ```{r}
 main_data <- main_data %>% mutate(BrainSegNotVent=BrainSegNotVent/100,CortexVol=CortexVol/1000, LeftHippocampus=LeftHippocampus/1000,rightHippocampusVol=rightHippocampusVol/1000)
 ```
@@ -107,8 +75,10 @@ main_data <- main_data %>% mutate(hippo_brain=total_hippo/BrainSegNotVent,hippo_
 
 ```
 
-## Data summarising
-
+**change sex character to numeric code (0=female, 1=male). NB specify to use dplyr because of masking by expss library.**
+```{r recode}
+main_data <- main_data %>% mutate(Sex=dplyr::recode(Sex,"M"=1,"F"=0))
+```
 ### add labels to variables to make plots/tables easier to read:
 
 
@@ -125,17 +95,37 @@ main_data  <- main_data %>% apply_labels(id="ID",
                                          memdela ='Memory (delayed)',
                                          vftot='Verbal Fluency',
                                          mrtotc='Matrix Reasoning (correct)',
-                                         RBP4_log10 ='log10[RBP4]',
                                          total_hippo='total Hippo (ml)')
 ```
+
+#### Data normalising and transforming units
+* Check data distribution visually
+    + attempt to fit a normal distribution curve to data
+
+```{r distribution}
+main_data %>% ggplot(aes(`RBP4 (ug/ml)`)) + geom_histogram(binwidth = 10,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$`RBP4 (ug/ml)`), sd=sd(main_data$`RBP4 (ug/ml)`))) + theme_bw()
+
+```
+
+**Transform the RBP4 data using log10
+```{r}
+main_data <- main_data %>% mutate(RBP4_log10=log10(`RBP4 (ug/ml)`))
+```
+*Check distribution
+```{r}
+main_data %>% ggplot(aes(RBP4_log10)) + geom_histogram(bins = 35,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$RBP4_log10), sd=sd(main_data$RBP4_log10))) + theme_bw()
+```
+
+### Data summary
 
 ## summarise data by sex
 ```{r}
 not.na = function(x) {sum(!is.na(x))}
 stats = c('mean', 'median', 'sd', 'not.na')
 
-main_data %>%select(`RBP4 (ug/ml)`,Sex) %>% group_by(Sex) %>% summarise_all(.funs=stats)
-                      
+kable(main_data %>%select(`RBP4 (ug/ml)`,Sex) %>% group_by(Sex) %>% summarise_all(.funs=stats),digits = 2) %>% kable_minimal(full_width = F, html_font = "Cambria")
+
+
 ```
 
 
