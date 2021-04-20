@@ -35,6 +35,7 @@ library(knitr) #neat tables
 library(kableExtra) #neater tables
 library(viridis)
 library(RColorBrewer)
+library(moderndive) # linear regression
 ```
 
 ### Prepare Data
@@ -73,7 +74,7 @@ main_data <- main_data %>% mutate(BrainSegNotVent=BrainSegNotVent/100,CortexVol=
 
 ```{r}
 main_data <- main_data %>% mutate(total_hippo=LeftHippocampus+rightHippocampusVol)
-main_data <- main_data %>% mutate(hippo_brain=total_hippo/BrainSegNotVent,hippo_icv=total_hippo/eTIV,hippo_brain=total_hippo/BrainSegNotVent)
+main_data <- main_data %>% mutate(hippo_brain=total_hippo/BrainSegNotVent,hippo_icv=total_hippo/eTIV,hippo_brain=total_hippo/BrainSegNotVent,brain_ICV=BrainSegNotVent/eTIV, lh_brain=LeftHippocampus/brain_ICV,rh_brain= rightHippocampusVol/BrainSegNotVent,lh_icv=LeftHippocampus/eTIV, rh_icv=rightHippocampusVol/eTIV)
 
 ```
 
@@ -86,7 +87,6 @@ main_data <- main_data %>% mutate(Sex=dplyr::recode(Sex,"M"=1,"F"=0))
 #calculate BMI
 main_data <- main_data %>% mutate(BMI=`Weight(kg)`/((`Height(cm)`*`Height(cm)`)/10000))
 ```
-
 
 **label  variables to make plots/tables easier to read:**
 ```{r}
@@ -102,8 +102,10 @@ main_data  <- main_data %>% apply_labels(id="ID",
                                          memdela ='Memory (delayed)',
                                          vftot='Verbal Fluency',
                                          mrtotc='Matrix Reasoning (correct)',
-                                         total_hippo='total Hippo (ml)')
+                                         total_hippo='total Hippo (ml)',
+                                        hippo_icv='TH/IVC')
 ```
+
 
 #### Data normalising and transforming units
 * Check data distribution visually
@@ -137,7 +139,7 @@ kable(main_data %>%select(`RBP4 (ug/ml)`,Sex) %>% group_by(Sex) %>% summarise_al
 
 
 ```{r}
-plotBMIvsRBP4 <- main_data %>% ggplot(aes(BMI,RBP4_log10))+geom_point(aes(color=factor(Sex)))+geom_smooth() + theme_bw()
+plotBMIvsRBP4 <- main_data %>% ggplot(aes(BMI,RBP4_log10))+geom_point()+geom_smooth() + theme_bw()
 
 plotBMIvsRBP4
 ```
@@ -162,9 +164,9 @@ plotRBP4vsdigit
 corrdata <- main_data %>%  filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
 corr1 <- rcorr(as.matrix(corrdata))
 M <- corr1$r
-#M
-colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
-rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
+M
+colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull","Brain/Skull", "lh/brain", "rh/brain","lh/skull","rh/skull", "Log10[RBP4]", "BMI")
+rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull","Brain/Skull", "lh/brain", "rh/brain","lh/skull","rh/skull", "Log10[RBP4]", "BMI")
 p_mat <- corr1$P
 corr <- corrplot(M, type = "upper",method="ellipse", order = "hclust", 
          p.mat = p_mat, sig.level = 0.05, insig = "blank")
@@ -181,8 +183,8 @@ corrdata <- main_data %>%filter(Sex==0) %>%  filter(!is.na(eTIV)) %>% select(-c(
 corr1 <- rcorr(as.matrix(corrdata))
 M <- corr1$r
 #M
-colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
-rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
+colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull","Brain/Skull", "lh/brain", "rh/brain","lh/skull","rh/skull", "Log10[RBP4]", "BMI")
+rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull","Brain/Skull", "lh/brain", "rh/brain","lh/skull","rh/skull", "Log10[RBP4]", "BMI")
 p_mat <- corr1$P
 corr <- corrplot(M, type = "upper",method="ellipse", order = "hclust", 
          p.mat = p_mat, sig.level = 0.05, insig = "blank")
@@ -195,13 +197,23 @@ corrdata <- main_data %>%filter(Sex==1) %>%  filter(!is.na(eTIV)) %>% select(-c(
 corr1 <- rcorr(as.matrix(corrdata))
 M <- corr1$r
 #M
-colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
-rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
+colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull","Brain/Skull", "lh/brain", "rh/brain","lh/skull","rh/skull", "Log10[RBP4]", "BMI")
+rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull","Brain/Skull", "lh/brain", "rh/brain","lh/skull","rh/skull", "Log10[RBP4]", "BMI")
 p_mat <- corr1$P
 corr <- corrplot(M, type = "upper",method="ellipse", order = "hclust", 
          p.mat = p_mat, sig.level = 0.05, insig = "blank")
 ```
 
+## Regression Analysis [RBP4] and it's risk factors/ consequences
+
+### RBP4 and the brain
+
+RBP4 and hippocampal volume
+```{r}
+lr_rbp4_BV <- lm(main_data$RBP4_log10~hippo_brain,data=main_data)
+main_data %>%use_labels(lm(RBP4_log10 ~ hippo_icv)) %>%summary()
+
+```
 
 
 
