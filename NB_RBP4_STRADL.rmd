@@ -33,6 +33,8 @@ library(corrplot) #plotting correlations
 library(expss) # apply labels to variable names
 library(knitr) #neat tables
 library(kableExtra) #neater tables
+library(viridis)
+library(RColorBrewer)
 ```
 
 ### Prepare Data
@@ -79,9 +81,14 @@ main_data <- main_data %>% mutate(hippo_brain=total_hippo/BrainSegNotVent,hippo_
 ```{r recode}
 main_data <- main_data %>% mutate(Sex=dplyr::recode(Sex,"M"=1,"F"=0))
 ```
-### add labels to variables to make plots/tables easier to read:
+
+```{r}
+#calculate BMI
+main_data <- main_data %>% mutate(BMI=`Weight(kg)`/((`Height(cm)`*`Height(cm)`)/10000))
+```
 
 
+**label  variables to make plots/tables easier to read:**
 ```{r}
 main_data  <- main_data %>% apply_labels(id="ID",
                                          BrainSegNotVent = "Brain Vol (ml)",
@@ -107,98 +114,95 @@ main_data %>% ggplot(aes(`RBP4 (ug/ml)`)) + geom_histogram(binwidth = 10,color="
 
 ```
 
-**Transform the RBP4 data using log10
+**Transform the RBP4 data using log10**
 ```{r}
 main_data <- main_data %>% mutate(RBP4_log10=log10(`RBP4 (ug/ml)`))
 ```
-*Check distribution
+**Check distribution**
 ```{r}
 main_data %>% ggplot(aes(RBP4_log10)) + geom_histogram(bins = 35,color="black", fill = "steelblue", alpha=.4,aes( y=..density..))+stat_function(fun = dnorm, args = list(mean =mean(main_data$RBP4_log10), sd=sd(main_data$RBP4_log10))) + theme_bw()
 ```
 
 ### Data summary
 
-## summarise data by sex
-```{r}
+**Summarise data by sex**
+```{r fig.cap="Plasma ug.ml-1"}
 not.na = function(x) {sum(!is.na(x))}
 stats = c('mean', 'median', 'sd', 'not.na')
-
-kable(main_data %>%select(`RBP4 (ug/ml)`,Sex) %>% group_by(Sex) %>% summarise_all(.funs=stats),digits = 2) %>% kable_minimal(full_width = F, html_font = "Cambria")
+kable(main_data %>%select(`RBP4 (ug/ml)`,Sex) %>% group_by(Sex) %>% summarise_all(.funs=stats),digits = 2) %>%kable_styling(font_size = 16) %>%  kable_minimal(full_width = F, html_font = "Cambria") 
 
 
 ```
+**Table 1.** [RBP4]^ug.ml-1^ by sex.
 
-
-## plot RBP4 against BMI
-```{r}
-#calculate BMI
-main_data <- main_data %>% mutate(BMI=`Weight(kg)`/((`Height(cm)`*`Height(cm)`)/10000))
-```
 
 ```{r}
 plotBMIvsRBP4 <- main_data %>% ggplot(aes(BMI,RBP4_log10))+geom_point(aes(color=factor(Sex)))+geom_smooth() + theme_bw()
 
 plotBMIvsRBP4
 ```
-
-## RBP4 against hippocampal volume
+**Figure 1.** [RBP4]^ug.ml-1^ and BMI
+**RBP4 against hippocampal volume**
 
 ```{r}
 main_data <- main_data %>% mutate(total_hippo=(LeftHippocampus+rightHippocampusVol))
-
 plotRBP4vsHippovol <- main_data %>% ggplot(aes(RBP4_log10,total_hippo))+geom_point()+stat_smooth(method='lm') + theme_bw()
-
 plotRBP4vsHippovol
-
-
 ```
+**Figure 2** [RBP4]^ug.ml-1^ and Total Hippocampal Volume ml^-1^
 
-## Plot RBP4 concentration against Digit Symbol result
+**Plot RBP4 concentration against Digit Symbol**
 ```{r}
 plotRBP4vsdigit <-  use_labels(main_data,{ggplot(..data,aes(RBP4_log10,digsym))+geom_point()+stat_smooth(method='lm') + theme_bw()})
 
 plotRBP4vsdigit
 ```
-## Corrlation Matrix of RBP4 against key variables
+**Corrlation Matrix of RBP4 against key variables**
 ```{r}
-corrdata <- main_data %>% filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
+corrdata <- main_data %>%  filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
 corr1 <- rcorr(as.matrix(corrdata))
-
 M <- corr1$r
+#M
+colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
+rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
 p_mat <- corr1$P
-corrplot(M, type = "upper",method="ellipse", order = "hclust", 
+corr <- corrplot(M, type = "upper",method="ellipse", order = "hclust", 
          p.mat = p_mat, sig.level = 0.05, insig = "blank")
-
-
 ```
 
 
-**There is no correlation between RBP4 concentrations and brain/cognition variables. (uncorrected)
+**There is no correlation between RBP4 concentrations and brain/cognition variables. (uncorrected)**
 
-### Split analysis by gender
 
-#### Female
-
+* Split analysis by gender
+  + Female
 ```{r}
 corrdata <- main_data %>%filter(Sex==0) %>%  filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
-corr1 <-cor(corrdata)
-
-corrplot(M, type = "upper",method="ellipse", order = "hclust", 
+corr1 <- rcorr(as.matrix(corrdata))
+M <- corr1$r
+#M
+colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
+rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
+p_mat <- corr1$P
+corr <- corrplot(M, type = "upper",method="ellipse", order = "hclust", 
          p.mat = p_mat, sig.level = 0.05, insig = "blank")
 ```
 
 
-#### Male
+*Male
 ```{r}
 corrdata <- main_data %>%filter(Sex==1) %>%  filter(!is.na(eTIV)) %>% select(-c(id,`RBP4 (ug/ml)`,Sex,`Height(cm)`,`Weight(kg)`,CRP,`GripStrength(kg)`,SD,CortexVol,eTIV,BrainSegNotVent,mrtote,mrtottime)) 
 corr1 <- rcorr(as.matrix(corrdata))
 M <- corr1$r
+#M
+colnames(M) <- c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
+rownames(M) <-  c("Left Hippo", "Right Hippo", "Age", "ST Memory", "LT Memory", "Digit Symbol", "Verbal Fluency", "Vocabulary", "Matrix Reasoning", "Total Hippo", "Hippo/Brain", "Hippo/Skull", "Log10[RBP4]", "BMI")
 p_mat <- corr1$P
-corrplot(M, type = "upper",method="ellipse", order = "hclust", 
+corr <- corrplot(M, type = "upper",method="ellipse", order = "hclust", 
          p.mat = p_mat, sig.level = 0.05, insig = "blank")
 ```
 
-```{r}
 
 
-```
+
+
